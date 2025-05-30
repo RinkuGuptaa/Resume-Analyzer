@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Analyzer Pro</title>
+    <style>
+        /* [Keep all your CSS styles exactly as they are in your original file] */
+          :root {
+            --primary-color: #007bff; /* Blue */
+            --secondary-color: #6c757d; /* Gray */
+            --success-color: #28a745; /* Green */
+            --warning-color: #ffc107; /* Yellow */
+            --danger-color: #dc3545; /* Red */
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            --border-radius: .3rem;
+        }
+
+        body {
+            font-family: var(--font-family-sans-serif);
+            margin: 0;
+            background-color: #e9ecef; /* Lighter gray background for the page */
+            color: var(--dark-color);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px 40px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 900px; /* Increased max-width for better content flow */
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2.2rem; /* Larger H1 */
+            font-weight: 600;
+        }
+
+        /* --- Form Elements --- */
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        input[type="file"] {
+            border: 2px dashed #ced4da;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            text-align: center;
+            background-color: var(--light-color);
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+            width: 100%;
+            max-width: 500px;
+        }
+        input[type="file"]::file-selector-button {
+            margin-right: 10px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #0056b3;
+        }
+        input[type="file"]:hover {
+            background-color: #e2e6ea;
+            border-color: var(--primary-color);
+        }
+
+
+        button[type="submit"] {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 30px; /* Larger padding */
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 1.1rem; /* Larger font size */
+            font-weight: 500;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button[type="submit"]:hover {
+            background-color: #0056b3; /* Darker blue on hover */
+            transform: translateY(-1px);
+        }
+        button[type="submit"]:active {
+            transform: translateY(0px);
+        }
+
+
+        /* --- Score Display --- */
+        .score-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .score-display {
+            display: inline-block;
+            padding: 15px 25px;
+            border-radius: var(--border-radius);
+            font-size: 1.8rem; /* Larger score font */
+            font-weight: 700; /* Bolder score */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 10px;
+        }
+        .score-excellent { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc;}
+        .score-good { background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5;}
+        .score-improvement { background-color: #f8d7da; color: #58151c; border: 1px solid #f1aeb5;}
+
+        .progress-bar-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: #e9ecef;
+            border-radius: var(--border-radius);
+            margin: 10px auto;
+            overflow: hidden; /* Important for rounded corners on progress */
+            height: 20px; /* Define height */
+        }
+        .progress-bar {
+            height: 100%;
+            line-height: 20px; /* Match height */
+            color: white;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            transition: width 0.5s ease-in-out;
+            border-radius: var(--border-radius); /* This won't work as expected on inner, rely on container overflow */
+        }
+        .progress-excellent { background-color: var(--success-color); }
+        .progress-good { background-color: var(--warning-color); color: var(--dark-color); } /* Darker text for yellow */
+        .progress-improvement { background-color: var(--danger-color); }
+
+
+        /* --- Feedback Section --- */
+        .feedback-section {
+            margin-top: 20px; /* Reduced top margin as score section has margin-bottom */
+            border: 1px solid #dee2e6; /* Lighter border */
+            padding: 25px;
+            border-radius: var(--border-radius);
+            background-color: #ffffff; /* White background for feedback itself */
+        }
+        .feedback-section h3.main-feedback-title {
+            margin-top: 0;
+            color: var(--dark-color);
+            border-bottom: 2px solid #e9ecef; /* Lighter separator */
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .feedback-section ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .feedback-section ul li {
+            padding: 12px 15px; /* Increased padding */
+            border-bottom: 1px solid #f1f3f5; /* Very light separator */
+            font-size: 0.95rem; /* Slightly larger feedback text */
+            display: flex; /* For aligning icons */
+            align-items: flex-start; /* Align icon to top of text */
+        }
+        .feedback-section ul li:last-child {
+            border-bottom: none;
+        }
+        .feedback-section .feedback-category {
+            font-weight: bold;
+            color: var(--primary-color);
+            background-color: #e7f3ff; /* Light blue background for category headers */
+            margin-top: 20px;
+            margin-bottom: 5px;
+            padding: 10px 15px;
+            border-radius: var(--border-radius);
+            font-size: 1.1rem;
+            display: block; /* Make it take full width */
+        }
+        /* Feedback item styling with icons */
+        .feedback-icon {
+            margin-right: 10px;
+            font-size: 1.2em; /* Make icon a bit larger */
+            line-height: 1.4; /* Align with first line of text */
+        }
+        .feedback-section .suggestion, .feedback-section .warning {
+            color: var(--danger-color);
+        }
+        .feedback-section .warning .feedback-icon::before { content: "⚠️"; }
+        .feedback-section .suggestion .feedback-icon::before { content: "💡"; }
+
+        .feedback-section .info {
+            color: var(--secondary-color);
+        }
+        .feedback-section .info .feedback-icon::before { content: "ℹ️"; }
+
+        .feedback-section .good {
+            color: var(--success-color);
+        }
+        .feedback-section .good .feedback-icon::before { content: "✅"; }
+
+        /* --- Text Preview Section --- */
+        .text-preview {
+            margin-top: 30px;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            background-color: var(--light-color);
+            max-height: 250px; /* Slightly taller */
+            overflow-y: auto;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; /* Monospace font */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.85rem; /* Smaller for dense text */
+            border-radius: var(--border-radius);
+        }
+        .text-preview h3 {
+             margin-top: 0;
+             font-size: 1.2rem;
+             color: var(--dark-color);
+             margin-bottom: 10px;
+        }
+
+        /* --- Footer (Optional) --- */
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+
+        /* --- Responsive Adjustments --- */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            .score-display {
+                font-size: 1.5rem;
+            }
+            .feedback-section h3.main-feedback-title {
+                font-size: 1.3rem;
+            }
+            .feedback-section ul li {
+                font-size: 0.9rem;
+            }
+            button[type="submit"], input[type="file"]::file-selector-button {
+                padding: 10px 20px;
+                font-size: 1rem;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <!-- [Keep all your HTML content exactly as it is in your original file] -->
+
+    <div class="container">
+        <h1>Resume Analyzer Pro</h1>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="resume" accept=".pdf,.docx" required title="Upload your PDF or DOCX resume">
+            <button type="submit">Analyze My Resume</button>
+        </form>
+
+        {% if score is not none %}
+        <div class="score-section">
+            <div class="score-display
+                {% if score >= 85 %}score-excellent
+                {% elif score >= 70 %}score-good
+                {% else %}score-improvement
+                {% endif %}">
+                Resume Score: {{ score }}/100
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar
+                    {% if score >= 85 %}progress-excellent
+                    {% elif score >= 70 %}progress-good
+                    {% else %}progress-improvement
+                    {% endif %}"
+                    style="width: {{ score }}%;">
+                    {% if score > 10 %}{{ score }}%{% endif %} {# Only show text if bar is wide enough #}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if feedback %}
+        <div class="feedback-section">
+            <h3 class="main-feedback-title">Detailed Analysis:</h3>
+            <ul>
+                {% for item in feedback %}
+                    {% if item.startswith("---") and item.endswith("---") %}
+                        <li class="feedback-category">{{ item.strip("- ") }}</li>
+                    {% else %}
+                        {% set item_class = 'info' %} {# Default class #}
+                        {% if 'Suggestion:' in item or 'Warning:' in item or 'Missing:' in item or 'Priority):' in item or 'needed' in item.lower() %}
+                            {% set item_class = 'suggestion' %}
+                            {% if 'Warning:' in item or 'Priority):' in item %}
+                                {% set item_class = 'warning' %}
+                            {% endif %}
+                        {% elif 'Good:' in item or 'Excellent!' in item or ('Detected' in item and 'errors' not in item) %}
+                            {% set item_class = 'good' %}
+                        {% endif %}
+                        <li class="{{ item_class }}">
+                            <span class="feedback-icon"></span> {# Icon will be added by CSS based on class #}
+                            <span>{{ item }}</span>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if text %}
+        <div class="text-preview">
+            <h3>Extracted Text Preview (first 1000 chars):</h3>
+            <pre>{{ text[:1000] }}{% if text|length > 1000 %}...{% endif %}</pre>
+        </div>
+        {% endif %}
+    </div>
+
+    <footer>
+        <p>© {{ now().year }} Resume Analyzer Pro. For educational purposes.</p>
+    </footer>
+
+    <script>
+        // Simple script to update file input text
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) {
+            fileInput.onchange = function() {
+                if (this.files.length > 0) {
+                    // Could update a label here if you had one,
+                    // or just rely on the browser's default display.
+                    // For the dashed box, a visual cue on selection might be nice via JS if needed.
+                }
+            }
+        }
+    </script>
+</body>
+</html>
