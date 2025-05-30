@@ -13,9 +13,11 @@ from datetime import datetime # For current year in footer
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
+    raise RuntimeError("spaCy model 'en_core_web_sm' not found. Check build setup.")
     print("Downloading spaCy model 'en_core_web_sm'...")
     spacy.cli.download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
+    
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads' # Optional: if you want to save files temporarily
