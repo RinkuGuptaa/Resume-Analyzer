@@ -6,3 +6,4 @@ en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_
 pyspellchecker==0.8.3
 textstat==0.7.7
 lxml==5.4.0
+gunicorn
