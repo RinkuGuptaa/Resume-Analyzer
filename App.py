@@ -13,17 +13,19 @@ from datetime import datetime # For current year in footer
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    raise RuntimeError("spaCy model 'en_core_web_sm' not found. Check build setup.")
-    print("Downloading spaCy model 'en_core_web_sm'...")
-    spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
-    
+    # If the model is not found, it's a setup issue for a deployed app.
+    # The original RuntimeError is good. The print/download lines were unreachable.
+    raise RuntimeError(
+        "spaCy model 'en_core_web_sm' not found. "
+        "Ensure it is included in your deployment environment (e.g., in build steps or requirements)."
+    )
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads' # Optional: if you want to save files temporarily
+# It's good practice to get configurations from environment variables in production
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
 
-# Ensure upload folder exists (optional)
+# Ensure upload folder exists (optional, consider if needed in a stateless environment)
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
@@ -50,7 +52,9 @@ def extract_text_from_docx(file_stream):
         return None, f"Error reading DOCX: {str(e)}"
     return text, None
 
-# --- Individual Analysis Functions (Modified to return scoring data) ---
+# --- Individual Analysis Functions (Using the second, more complete set from your original code) ---
+# Ensure this is the set of functions you intend to use.
+# The first set of definitions that appeared before the original line 817 should be removed.
 
 def check_contact_info(text):
     feedback = []
@@ -125,7 +129,7 @@ def check_resume_length(text):
 
 def check_action_verbs(doc):
     feedback = []
-    # This is a comprehensive list, feel free to add/remove based on industry or preference
+    # Using the more comprehensive list from your first definition
     action_verbs_list = [
         "accelerated", "achieved", "acquired", "adapted", "administered", "advanced", "advised", "advocated", "aided", "allocated", "analyzed", "anticipated", "applied", "appraised", "approved", "arbitrated", "arranged", "articulated", "assembled", "assessed", "assigned", "assisted", "attained", "audited", "augmented", "authored", "authorized", "automated", "awarded",
         "balanced", "benchmarked", "boosted", "briefed", "broadened", "budgeted", "built",
@@ -196,7 +200,6 @@ def check_skills_section(text, doc):
     if not skills_section_present:
         feedback.append("Suggestion: A dedicated 'Skills' section is highly recommended for listing technical and other key competencies. This makes it easy for recruiters to spot relevant abilities.")
     
-    # Expanded list of example technical skills - this should ideally be much larger or configurable
     technical_skills_keywords = [
         "python", "java", "c++", "c#", "javascript", "typescript", "html", "css", "scss", "sass", "php", "ruby", "go", "swift", "kotlin", "rust", "scala",
         "sql", "mysql", "postgresql", "mongodb", "nosql", "sqlite", "oracle", "sql server", "cassandra", "redis",
@@ -214,8 +217,7 @@ def check_skills_section(text, doc):
     for token in doc:
         if token.lemma_.lower() in technical_skills_keywords:
             found_tech_skills.add(token.lemma_.lower())
-    # Check for multi-word skills (simple approach)
-    for skill_phrase in [s for s in technical_skills_keywords if " " in s or "." in s or "#" in s]: # e.g. "node.js", "c#", "data science"
+    for skill_phrase in [s for s in technical_skills_keywords if " " in s or "." in s or "#" in s]:
         if skill_phrase in text_lower:
                 found_tech_skills.add(skill_phrase)
     
@@ -238,21 +240,16 @@ def check_skills_section(text, doc):
 def perform_spell_check(text):
     feedback = []
     spell = SpellChecker()
-    # Clean text a bit for spellchecker: remove punctuation, numbers for better results
-    clean_text = re.sub(r'[^\w\s]', ' ', text) # replace punctuation with space
-    clean_text = re.sub(r'\d+', '', clean_text)    # remove numbers
+    clean_text = re.sub(r'[^\w\s]', ' ', text) 
+    clean_text = re.sub(r'\d+', '', clean_text)    
     words = clean_text.lower().split()
-
-    # Filter out very short words or common initialisms that might be flagged
     words_to_check = [word for word in words if len(word) > 2 and not word.isupper()]
-
     misspelled = spell.unknown(words_to_check)
-    # Add more known technical terms or acronyms that are not in standard dictionaries
     common_tech_terms_or_acronyms = {
         "aws", "gcp", "api", "sdk", "cicd", "devops", "sql", "nosql", "html", "css", "json", "uiux", "erp", "crm",
         "saas", "paas", "iaas", "agile", "scrum", "kanban", "jira", "git", "github", "kubernetes", "k8s",
         "microservices", "blockchain", "fintech", "edtech", "healthtech", "iot", "arvr", "aiops", "mlops"
-    } # This list can be expanded
+    } 
     misspelled_filtered = [word for word in misspelled if word not in common_tech_terms_or_acronyms and not any(char.isdigit() for char in word)]
 
     if len(misspelled_filtered) > 0:
@@ -281,40 +278,37 @@ def check_readability(text):
 
     except Exception as e:
         feedback.append(f"Info: Could not calculate readability score. Error: {e}")
-    score_data = {'flesch_score': flesch_score if flesch_score > 0 else 50} # Default to neutral if error
+    score_data = {'flesch_score': flesch_score if 'flesch_score' in locals() and flesch_score != 0 else 50}
     return feedback, score_data
 
 def check_use_of_i(text):
     feedback = []
-    # Count occurrences of " I " (with spaces), "I'm", "I've", "I'd", "my", "me"
-    i_count = len(re.findall(r'\bI\b', text)) # Case sensitive for "I"
+    i_count = len(re.findall(r'\bI\b', text)) 
     i_contractions_count = len(re.findall(r"\b(I'm|I've|I'd|I’ll|I’d)\b", text, re.IGNORECASE))
     my_me_count = len(re.findall(r"\b(my|me)\b", text, re.IGNORECASE))
     total_first_person_count = i_count + i_contractions_count + my_me_count
 
-    if total_first_person_count > 3: # A little tolerance
+    if total_first_person_count > 3: 
         feedback.append(f"Suggestion: Found first-person pronouns (I, my, me, I'm, etc.) used approximately {total_first_person_count} times. Resumes are typically written in an implied first-person (e.g., 'Managed a team' instead of 'I managed a team'). Consider rephrasing to be more professional and concise.")
-    score_data = {'i_count': total_first_person_count} # Renamed for clarity
+    score_data = {'i_count': total_first_person_count}
     return feedback, score_data
 
 def check_dates_format(text):
     feedback = []
-    # Common date patterns: "May 2020", "05/2020", "2019 - 2021", "2018 - Present"
-    # More robust regex for month names and various year/range formats
     date_patterns = [
-        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b', # Month YYYY
-        r'\b\d{1,2}\/\d{4}\b', # MM/YYYY
-        r'\b\d{1,2}\-\d{4}\b', # MM-YYYY
-        r'\b\d{4}\s*[-–—to]+\s*\d{4}\b', # YYYY - YYYY (with various dashes)
-        r'\b\d{4}\s*[-–—to]+\s*(?:Present|Current|Ongoing|Till Date)\b', # YYYY - Present (with variations)
-        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—to]+\s*(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b', # Month YYYY - Month YYYY
-        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—to]+\s*(?:Present|Current|Ongoing|Till Date)\b' # Month YYYY - Present
+        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b', 
+        r'\b\d{1,2}\/\d{4}\b', 
+        r'\b\d{1,2}\-\d{4}\b', 
+        r'\b\d{4}\s*[-–—to]+\s*\d{4}\b', 
+        r'\b\d{4}\s*[-–—to]+\s*(?:Present|Current|Ongoing|Till Date)\b', 
+        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—to]+\s*(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b', 
+        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—to]+\s*(?:Present|Current|Ongoing|Till Date)\b'
     ]
     dates_found_count = 0
     for pattern in date_patterns:
         dates_found_count += len(re.findall(pattern, text, re.IGNORECASE))
 
-    if dates_found_count < 2: # Expect at least a couple for education/experience for most resumes
+    if dates_found_count < 2: 
         feedback.append("Suggestion: Few standard date formats found for employment or education periods. Ensure your experience and education sections have clear and consistently formatted start and end dates (e.g., 'Month YYYY – Month YYYY' or 'Month YYYY – Present').")
     else:
         feedback.append(f"Info: Detected {dates_found_count} instances of common date formats. Consistency in formatting is key for readability.")
@@ -323,446 +317,76 @@ def check_dates_format(text):
 
 
 # --- Scoring Logic ---
+# Using the more detailed scoring logic from your first definition
 def calculate_resume_score(score_inputs):
     base_score = 100
     deductions = 0
-    bonus_points = 0 # For exceptionally good aspects
+    bonus_points = 0 
 
-    # Contact Info (Essential)
     if not score_inputs['contact_info']['email_found']: deductions += 10
     if not score_inputs['contact_info']['phone_found']: deductions += 10
-    # LinkedIn is good but not as critical as email/phone for basic functionality
     if not score_inputs['contact_info']['linkedin_found']: deductions += 3
 
-    # Sections (Essential Structure)
     sections_ratio = score_inputs['sections']['required_sections_found'] / score_inputs['sections']['total_required_sections']
-    if sections_ratio < 0.5: deductions += 15 # Missing more than half key sections
-    elif sections_ratio < 0.75: deductions += 10 # Missing 1-2 key sections
-    elif sections_ratio < 1.0: deductions += 5  # Missing 1 key section
-    else: bonus_points += 2 # All key sections present
+    if sections_ratio < 0.5: deductions += 15 
+    elif sections_ratio < 0.75: deductions += 10 
+    elif sections_ratio < 1.0: deductions += 5  
+    else: bonus_points += 2 
 
-    # Length (Important for readability and ATS)
     if not score_inputs['length']['length_ok']: deductions += 5
-    # Small bonus if word count is in a good range (e.g., 400-600 for experienced)
     wc = score_inputs['length']['word_count']
     if 400 <= wc <= 700 : bonus_points += 2
 
-
-    # Action Verbs (Impact)
     av_count = score_inputs['action_verbs']['action_verb_count']
     if av_count < 5: deductions += 8
     elif av_count < 10: deductions += 5
     elif av_count < 15: deductions += 2
-    elif av_count >= 20: bonus_points += 3 # Good use of action verbs
+    elif av_count >= 20: bonus_points += 3 
 
-    # Quantifiable Achievements (Very High Impact)
     qa_count = score_inputs['quantifiable']['quantifiable_count']
     if qa_count == 0: deductions += 18
     elif qa_count < 2: deductions += 10
     elif qa_count < 4: deductions += 5
-    elif qa_count >= 5: bonus_points += 5 # Excellent quantification
+    elif qa_count >= 5: bonus_points += 5 
 
-    # Skills (Clarity for ATS and Recruiters)
     if not score_inputs['skills']['skills_section_present']: deductions += 7
-    elif score_inputs['skills']['tech_skills_count'] < 3: deductions += 4 # Few specific skills
+    elif score_inputs['skills']['tech_skills_count'] < 3: deductions += 4 
     elif score_inputs['skills']['tech_skills_count'] < 5: deductions += 2
-    elif score_inputs['skills']['tech_skills_count'] >= 10: bonus_points += 2 # Good number of skills
+    elif score_inputs['skills']['tech_skills_count'] >= 10: bonus_points += 2 
 
-    # Spelling (Professionalism)
     misspelled = score_inputs['spelling']['misspelled_count']
     if misspelled > 5: deductions += 12
     elif misspelled > 2: deductions += 7
     elif misspelled > 0: deductions += 3
 
-    # Readability (Flesch score: higher is better)
     f_score = score_inputs['readability']['flesch_score']
     if f_score < 30: deductions += 8
     elif f_score < 50: deductions += 5
     elif f_score < 60: deductions += 2
-    elif f_score >= 70: bonus_points += 2 # Very readable
+    elif f_score >= 70: bonus_points += 2 
 
-    # "I" usage (Professional Tone)
-    i_usage_count = score_inputs['use_of_i']['i_count'] # Corrected key name
+    i_usage_count = score_inputs['use_of_i']['i_count'] 
     if i_usage_count > 5: deductions += 5
     elif i_usage_count > 2: deductions += 2
 
-    # Dates (Clarity and ATS)
-    if score_inputs['dates']['dates_found_count'] < 2: deductions += 4 # If very few dates for experience/edu
-    elif score_inputs['dates']['dates_found_count'] < 4: deductions += 2 # If dates present but maybe not for all sections
+    if score_inputs['dates']['dates_found_count'] < 2: deductions += 4 
+    elif score_inputs['dates']['dates_found_count'] < 4: deductions += 2 
 
-    final_score = max(0, min(100, base_score - deductions + bonus_points)) # Cap score at 0-100
+    final_score = max(0, min(100, base_score - deductions + bonus_points)) 
     return int(final_score)
 
 
 # --- Main Analysis Orchestrator ---
+# Using the more detailed one from your first definition
 def analyze_resume_content(text):
     feedback_results = []
-    score_inputs = {} # To store data for scoring
+    score_inputs = {} 
 
     if not text or not text.strip():
         feedback_results.append("Error: The extracted text is empty. Cannot analyze.")
-        return feedback_results, 0 # Return 0 score for empty text
+        return feedback_results, 0 
 
-    doc = nlp(text) # Process text with spaCy once
-
-    feedback_results.append("--- Overall & Contact ---")
-    fb, data = check_contact_info(text)
-    feedback_results.extend(fb); score_inputs['contact_info'] = data
-    fb, data = check_resume_length(text)
-    feedback_results.extend(fb); score_inputs['length'] = data
-
-    feedback_results.append("\n--- Structure & Sections ---")
-    fb, data = check_section_headings(text)
-    feedback_results.extend(fb); score_inputs['sections'] = data
-    fb, data = check_dates_format(text)
-    feedback_results.extend(fb); score_inputs['dates'] = data
-
-    feedback_results.append("\n--- Content & Impact ---")
-    fb, data = check_action_verbs(doc)
-    feedback_results.extend(fb); score_inputs['action_verbs'] = data
-    fb, data = check_quantifiable_achievements(doc)
-    feedback_results.extend(fb); score_inputs['quantifiable'] = data
-    fb, data = check_skills_section(text, doc)
-    feedback_results.extend(fb); score_inputs['skills'] = data
-
-    feedback_results.append("\n--- Language & Professionalism ---")
-    fb, data = perform_spell_check(text)
-    feedback_results.extend(fb); score_inputs['spelling'] = data
-    fb, data = check_readability(text)
-    feedback_results.extend(fb); score_inputs['readability'] = data
-    fb, data = check_use_of_i(text)
-    feedback_results.extend(fb); score_inputs['use_of_i'] = data # Corrected key
-
-    # Calculate Score
-    resume_score = calculate_resume_score(score_inputs)
-
-    feedback_results.append(f"\n--- Overall Score: {resume_score}/100 ---")
-    if resume_score >= 85:
-        feedback_results.append("Excellent! Your resume hits most of the key marks for a strong document. It's likely to perform well with both ATS and human reviewers.")
-    elif resume_score >= 70:
-        feedback_results.append("Good foundation! Your resume has several strong points. Addressing the suggestions can elevate it further and increase its effectiveness.")
-    elif resume_score >= 50:
-        feedback_results.append("Needs improvement. Your resume has potential but requires attention to several key areas. Focus on the suggestions marked 'High Priority' or 'Warning'.")
-    else:
-        feedback_results.append("Significant improvement needed. Your resume may be missing critical elements or have issues that could hinder your job search. Systematically address the feedback provided.")
-
-
-    feedback_results.append("\n--- General Advice ---")
-    feedback_results.append("Info: This is an automated analysis. While it provides valuable insights, also consider having your resume reviewed by a career advisor, mentor, or trusted professional in your field.")
-    feedback_results.append("Info: Tailor your resume for each specific job application. Highlight the skills and experiences most relevant to the job description, and try to incorporate keywords from it.")
-    feedback_results.append("Info: Ensure your resume is free of grammatical errors (this tool has basic spell check, but grammar is more complex). Use tools like Grammarly or ask someone to proofread.")
-    feedback_results.append("Info: Keep your formatting clean, consistent, and professional. Avoid using tables, columns, or unusual fonts that might confuse Applicant Tracking Systems (ATS).")
-
-
-    # Filter out any None values if a function might return them
-    return [f for f in feedback_results if f is not None], resume_score
-
-
-# --- Flask Routes ---
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    feedback_messages = []
-    extracted_text_content = ""
-    resume_score = None # Initialize score
-
-    if request.method == 'POST':
-        if 'resume' not in request.files:
-            feedback_messages.append("Error: No file part in the request.")
-            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
-
-        file = request.files['resume']
-
-        if file.filename == '':
-            feedback_messages.append("Error: No file selected.")
-            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
-
-        if file:
-            filename = file.filename
-            # Read file into memory stream
-            file_stream = io.BytesIO()
-            file.save(file_stream) # Save file object to BytesIO stream
-            file_stream.seek(0) # Reset stream position to the beginning
-
-            error_message = None
-            if filename.lower().endswith('.pdf'):
-                extracted_text_content, error_message = extract_text_from_pdf(file_stream)
-            elif filename.lower().endswith('.docx'):
-                extracted_text_content, error_message = extract_text_from_docx(file_stream)
-            else:
-                feedback_messages.append("Error: Unsupported file type. Please upload a PDF or DOCX file.")
-                return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
-
-            if error_message:
-                feedback_messages.append(f"Error during text extraction: {error_message}")
-            elif extracted_text_content and extracted_text_content.strip():
-                feedback_messages.append(f"Info: Successfully extracted text from '{filename}' ({len(extracted_text_content)} characters).")
-                # Get feedback and score
-                analysis_results, resume_score_val = analyze_resume_content(extracted_text_content)
-                feedback_messages.extend(analysis_results)
-                resume_score = resume_score_val # Assign the calculated score
-            else:
-                feedback_messages.append("Warning: Could not extract any text from the file, or the file is empty. Please check the file content and format. If it's a scanned PDF, text extraction might fail.")
-                resume_score = 0 # Assign a score of 0 if no text
-
-    return render_template('index.html',
-                           feedback=feedback_messages,
-                           text=extracted_text_content,
-                           score=resume_score,
-                           now=datetime.now) # Pass datetime object for footer
-
-if __name__ == '__main__':
-    # For development, debug=True is fine. For production, use a proper WSGI server like Gunicorn or Waitress.
-    app.run(debug=True)
-
-
-# --- Individual Analysis Functions (Modified to return scoring data) ---
-
-def check_contact_info(text):
-    feedback = []
-    score_data = {'email_found': False, 'phone_found': False, 'linkedin_found': False}
-    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-    phone_pattern = r"(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})"
-
-    if re.search(email_pattern, text):
-        feedback.append("Good: Email address detected.")
-        score_data['email_found'] = True
-    else:
-        feedback.append("Suggestion (High Priority): Email address not found or in an unrecognized format. Ensure it's clearly visible.")
-
-    if re.search(phone_pattern, text):
-        feedback.append("Good: Phone number detected.")
-        score_data['phone_found'] = True
-    else:
-        feedback.append("Suggestion (High Priority): Phone number not found or in an unrecognized format. Ensure it's clearly visible.")
-
-    if "linkedin.com/in/" in text.lower() or "linkedin.com/pub/" in text.lower():
-        feedback.append("Good: LinkedIn profile link seems to be present.")
-        score_data['linkedin_found'] = True
-    else:
-        feedback.append("Suggestion: Consider adding a link to your LinkedIn profile.")
-    return feedback, score_data
-
-def check_section_headings(text):
-    feedback = []
-    text_lower = text.lower()
-    required_sections_map = {
-        "summary": ["summary", "profile", "objective"],
-        "experience": ["experience", "work experience", "professional experience"],
-        "education": ["education", "academic background"],
-        "skills": ["skills", "technical skills", "proficiencies"]
-    }
-    found_required_count = 0
-    for key, variations in required_sections_map.items():
-        if any(variation in text_lower for variation in variations):
-            feedback.append(f"Good: Section '{key.capitalize()}' seems to be present.")
-            found_required_count += 1
-        else:
-            feedback.append(f"Suggestion: Missing a clear '{key.capitalize()}' section. This is a standard resume component.")
-
-    if found_required_count < len(required_sections_map):
-        feedback.append("Warning: Some standard sections (Summary, Experience, Education, Skills) might be missing or not clearly labeled.")
-
-    score_data = {'required_sections_found': found_required_count, 'total_required_sections': len(required_sections_map)}
-    return feedback, score_data
-
-def check_resume_length(text):
-    feedback = []
-    word_count = len(text.split())
-    feedback.append(f"Info: Total word count is approximately {word_count}.")
-    length_ok = True
-    if word_count < 250:
-        feedback.append("Suggestion: Your resume seems quite short (less than 250 words). Consider adding more detail.")
-        length_ok = False
-    elif word_count > 800:
-        feedback.append("Suggestion: Your resume might be too long (over 800 words). Aim for conciseness.")
-        length_ok = False
-    # Add more fine-grained feedback as before if needed
-    score_data = {'word_count': word_count, 'length_ok': length_ok}
-    return feedback, score_data
-
-def check_action_verbs(doc):
-    feedback = []
-    action_verbs_list = [ # Keep your comprehensive list
-        "achieved", "administered", "advised", "analyzed", "authored", "budgeted",
-        "built", "calculated", "chaired", "coached", "collaborated", "communicated",
-        "completed", "conceived", "conducted", "created", "designed", "developed",
-        "directed", "established", "evaluated", "executed", "facilitated", "generated",
-        "implemented", "improved", "increased", "initiated", "innovated", "led", "managed",
-        "negotiated", "optimized", "organized", "oversaw", "performed", "planned",
-        "presented", "researched", "resolved", "spearheaded", "supervised", "trained"
-    ] # This is a shorter example list for brevity in the response, use your longer one
-    action_verb_count = 0
-    for token in doc:
-        if token.pos_ == "VERB" and token.lemma_.lower() in action_verbs_list:
-            action_verb_count += 1
-    # Feedback messages based on count (as before)
-    if action_verb_count < 10:
-         feedback.append(f"Suggestion: Found {action_verb_count} action verbs. Aim for more (e.g., 15-25+).")
-    else:
-         feedback.append(f"Good: Detected {action_verb_count} action verbs.")
-    score_data = {'action_verb_count': action_verb_count}
-    return feedback, score_data
-
-def check_quantifiable_achievements(doc):
-    feedback = []
-    quantifiable_count = 0
-    achievement_keywords = ["increased", "decreased", "achieved", "reduced", "grew", "improved", "optimized", "saved", "generated", "led to"]
-    for sent in doc.sents:
-        has_number = any(token.like_num or token.text == "%" or token.text in ["$", "€", "£"] for token in sent)
-        has_achievement_verb = any(token.lemma_.lower() in achievement_keywords for token in sent)
-        if has_number and has_achievement_verb:
-            quantifiable_count += 1
-    # Feedback messages based on count (as before)
-    if quantifiable_count == 0:
-        feedback.append("Suggestion (High Priority): No clear quantifiable achievements found.")
-    else:
-        feedback.append(f"Good: Detected {quantifiable_count} potential quantifiable achievements.")
-    score_data = {'quantifiable_count': quantifiable_count}
-    return feedback, score_data
-
-def check_skills_section(text, doc):
-    feedback = []
-    text_lower = text.lower()
-    skills_section_present = "skill" in text_lower or "proficiencies" in text_lower or "expertise" in text_lower
-    if not skills_section_present:
-        feedback.append("Suggestion: A dedicated 'Skills' section is highly recommended.")
-    # Technical skills count (as before)
-    technical_skills_keywords = ["python", "java", "sql", "aws", "react", "machine learning", "data analysis"] # Example
-    found_tech_skills_count = 0
-    # ... (your logic to count tech skills) ...
-    for token in doc:
-        if token.lemma_.lower() in technical_skills_keywords:
-            found_tech_skills_count +=1
-
-    if found_tech_skills_count > 0 :
-        feedback.append(f"Good: Identified {found_tech_skills_count} technical skills.")
-    else:
-        if skills_section_present:
-             feedback.append("Suggestion: Your skills section seems to be missing specific technical skills.")
-
-    score_data = {'skills_section_present': skills_section_present, 'tech_skills_count': found_tech_skills_count}
-    return feedback, score_data
-
-def perform_spell_check(text):
-    feedback = []
-    spell = SpellChecker()
-    clean_text = re.sub(r'[^\w\s]', '', text)
-    clean_text = re.sub(r'\d+', '', clean_text)
-    words_to_check = [word for word in clean_text.lower().split() if len(word) > 2 and not word.isupper()]
-    misspelled = spell.unknown(words_to_check)
-    common_tech_terms_or_acronyms = {"aws", "gcp", "api", "sdk", "cicd", "devops", "sql", "nosql", "html", "css", "json"}
-    misspelled_filtered = [word for word in misspelled if word not in common_tech_terms_or_acronyms and not any(char.isdigit() for char in word)]
-    # Feedback messages (as before)
-    if len(misspelled_filtered) > 0:
-        feedback.append(f"Warning (Spelling): Found {len(misspelled_filtered)} potential spelling errors.")
-    else:
-        feedback.append("Good: No obvious spelling errors detected.")
-    score_data = {'misspelled_count': len(misspelled_filtered)}
-    return feedback, score_data
-
-def check_readability(text):
-    feedback = []
-    flesch_score = 0
-    try:
-        flesch_score = textstat.flesch_reading_ease(text)
-        # Feedback messages (as before)
-        feedback.append(f"Info (Readability): Flesch Reading Ease score: {flesch_score:.2f}.")
-        if flesch_score < 30:
-            feedback.append("Suggestion: Readability is very low.")
-        elif flesch_score < 60:
-            feedback.append("Suggestion: Readability is fairly difficult.")
-        else:
-            feedback.append("Good: Readability score suggests the text is understandable.")
-    except Exception:
-        feedback.append("Info: Could not calculate readability score.")
-    score_data = {'flesch_score': flesch_score if flesch_score > 0 else 50} # Default to neutral if error
-    return feedback, score_data
-
-def check_use_of_i(text):
-    feedback = []
-    i_count = text.lower().count(" i ") + text.lower().count("i'm") + text.lower().count("i've") + text.lower().count("i'd")
-    # Feedback (as before)
-    if i_count > 5:
-        feedback.append(f"Suggestion: Found 'I' used {i_count} times. Avoid first-person pronouns.")
-    score_data = {'i_count': i_count}
-    return feedback, score_data
-
-def check_dates_format(text):
-    feedback = []
-    date_patterns = [ # Keep your patterns
-        r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b',
-        r'\b\d{4}\s*-\s*(?:Present|Current|Ongoing)\b'
-    ]
-    dates_found_count = 0
-    for pattern in date_patterns:
-        dates_found_count += len(re.findall(pattern, text, re.IGNORECASE))
-    # Feedback (as before)
-    if dates_found_count < 2 :
-        feedback.append("Suggestion: Few standard date formats found. Ensure consistent date formatting.")
-    score_data = {'dates_found_count': dates_found_count}
-    return feedback, score_data
-
-# --- Scoring Logic ---
-def calculate_resume_score(score_inputs):
-    base_score = 100
-    deductions = 0
-
-    # Contact Info
-    if not score_inputs['contact_info']['email_found']: deductions += 10
-    if not score_inputs['contact_info']['phone_found']: deductions += 10
-    if not score_inputs['contact_info']['linkedin_found']: deductions += 3 # Less critical
-
-    # Sections
-    sections_ratio = score_inputs['sections']['required_sections_found'] / score_inputs['sections']['total_required_sections']
-    if sections_ratio < 0.75: deductions += 10 # Missing more than 1 key section
-    elif sections_ratio < 1.0: deductions += 5  # Missing 1 key section
-
-    # Length
-    if not score_inputs['length']['length_ok']: deductions += 5
-
-    # Action Verbs
-    if score_inputs['action_verbs']['action_verb_count'] < 5: deductions += 7
-    elif score_inputs['action_verbs']['action_verb_count'] < 10: deductions += 4
-
-    # Quantifiable Achievements
-    if score_inputs['quantifiable']['quantifiable_count'] == 0: deductions += 15 # High impact
-    elif score_inputs['quantifiable']['quantifiable_count'] < 2: deductions += 7
-
-    # Skills
-    if not score_inputs['skills']['skills_section_present']: deductions += 5
-    elif score_inputs['skills']['tech_skills_count'] < 3: deductions += 3 # Few skills listed
-
-    # Spelling
-    if score_inputs['spelling']['misspelled_count'] > 5: deductions += 10
-    elif score_inputs['spelling']['misspelled_count'] > 0: deductions += 5
-
-    # Readability (Flesch score: higher is better)
-    f_score = score_inputs['readability']['flesch_score']
-    if f_score < 30: deductions += 10
-    elif f_score < 50: deductions += 5
-    elif f_score < 60: deductions += 2
-
-    # "I" usage
-    if score_inputs['use_of_i']['i_count'] > 5: deductions += 3
-    if score_inputs['use_of_i']['i_count'] > 10: deductions += 2 # Additional deduction
-
-    # Dates
-    if score_inputs['dates']['dates_found_count'] < 2: deductions += 3
-
-    final_score = max(0, base_score - deductions) # Ensure score is not negative
-    return int(final_score)
-
-
-# --- Main Analysis Orchestrator ---
-def analyze_resume_content(text):
-    feedback_results = []
-    score_inputs = {} # To store data for scoring
-
-    if not text or not text.strip():
-        feedback_results.append("Error: The extracted text is empty. Cannot analyze.")
-        return feedback_results, 0 # Return 0 score for empty text
-
-    doc = nlp(text)
+    doc = nlp(text) 
 
     feedback_results.append("--- Overall & Contact ---")
     fb, data = check_contact_info(text)
@@ -792,73 +416,136 @@ def analyze_resume_content(text):
     fb, data = check_use_of_i(text)
     feedback_results.extend(fb); score_inputs['use_of_i'] = data
 
-    # Calculate Score
     resume_score = calculate_resume_score(score_inputs)
 
     feedback_results.append(f"\n--- Overall Score: {resume_score}/100 ---")
     if resume_score >= 85:
-        feedback_results.append("Excellent! Your resume hits most of the key marks for a strong document.")
+        feedback_results.append("Excellent! Your resume hits most of the key marks for a strong document. It's likely to perform well with both ATS and human reviewers.")
     elif resume_score >= 70:
-        feedback_results.append("Good foundation! Your resume has several strong points, with some areas for improvement.")
+        feedback_results.append("Good foundation! Your resume has several strong points. Addressing the suggestions can elevate it further and increase its effectiveness.")
     elif resume_score >= 50:
-        feedback_results.append("Needs improvement. Your resume has potential but requires attention to several key areas to be more effective.")
+        feedback_results.append("Needs improvement. Your resume has potential but requires attention to several key areas. Focus on the suggestions marked 'High Priority' or 'Warning'.")
     else:
-        feedback_results.append("Significant improvement needed. Focus on addressing the suggestions to build a stronger resume.")
-
+        feedback_results.append("Significant improvement needed. Your resume may be missing critical elements or have issues that could hinder your job search. Systematically address the feedback provided.")
 
     feedback_results.append("\n--- General Advice ---")
-    feedback_results.append("Info: This is an automated analysis. For best results, also have your resume reviewed by a career advisor or trusted professional.")
-    feedback_results.append("Info: Tailor your resume for each job application, highlighting the most relevant skills and experiences from the job description.")
+    feedback_results.append("Info: This is an automated analysis. While it provides valuable insights, also consider having your resume reviewed by a career advisor, mentor, or trusted professional in your field.")
+    feedback_results.append("Info: Tailor your resume for each specific job application. Highlight the skills and experiences most relevant to the job description, and try to incorporate keywords from it.")
+    feedback_results.append("Info: Ensure your resume is free of grammatical errors (this tool has basic spell check, but grammar is more complex). Use tools like Grammarly or ask someone to proofread.")
+    feedback_results.append("Info: Keep your formatting clean, consistent, and professional. Avoid using tables, columns, or unusual fonts that might confuse Applicant Tracking Systems (ATS).")
 
     return [f for f in feedback_results if f is not None], resume_score
 
 
 # --- Flask Routes ---
 @app.route('/', methods=['GET', 'POST'])
-def index():
+def render_index_page(): # Renamed from 'index' to avoid endpoint collision
     feedback_messages = []
     extracted_text_content = ""
-    resume_score = None # Initialize score
+    resume_score = None 
 
     if request.method == 'POST':
-        # ... (file handling logic as before) ...
         if 'resume' not in request.files:
             feedback_messages.append("Error: No file part in the request.")
-            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+            # Pass now=datetime.now for consistency if your template uses it on GET
+            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
 
         file = request.files['resume']
 
         if file.filename == '':
             feedback_messages.append("Error: No file selected.")
-            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
 
         if file:
             filename = file.filename
-            file_stream = io.BytesIO(file.read())
-            file_stream.seek(0)
+            file_stream = io.BytesIO()
+            file.save(file_stream) 
+            file_stream.seek(0) 
 
             error_message = None
-            if filename.endswith('.pdf'):
+            if filename.lower().endswith('.pdf'):
                 extracted_text_content, error_message = extract_text_from_pdf(file_stream)
-            elif filename.endswith('.docx'):
+            elif filename.lower().endswith('.docx'):
                 extracted_text_content, error_message = extract_text_from_docx(file_stream)
             else:
                 feedback_messages.append("Error: Unsupported file type. Please upload a PDF or DOCX file.")
-                return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+                return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score, now=datetime.now)
 
             if error_message:
                 feedback_messages.append(f"Error during text extraction: {error_message}")
             elif extracted_text_content and extracted_text_content.strip():
                 feedback_messages.append(f"Info: Successfully extracted text from '{filename}' ({len(extracted_text_content)} characters).")
-                # Get feedback and score
                 analysis_results, resume_score_val = analyze_resume_content(extracted_text_content)
                 feedback_messages.extend(analysis_results)
-                resume_score = resume_score_val # Assign the calculated score
+                resume_score = resume_score_val 
             else:
-                feedback_messages.append("Warning: Could not extract any text from the file, or the file is empty.")
-                resume_score = 0 # Assign a score of 0 if no text
+                feedback_messages.append("Warning: Could not extract any text from the file, or the file is empty. Please check the file content and format. If it's a scanned PDF, text extraction might fail.")
+                resume_score = 0 
+
+    return render_template('index.html',
+                           feedback=feedback_messages,
+                           text=extracted_text_content,
+                           score=resume_score,
+                           now=datetime.now)
+
+# The '/analyze' route was defined in the second block of your original code.
+# It seems to serve the same purpose as the POST to '/' but on a different URL.
+# If it's intended to be different, keep it. If it's redundant, you might remove it or merge logic.
+# For now, I'll assume it was part of the duplicated structure and might not be needed if '/' handles POST.
+# If you need '/analyze', ensure its logic is what you expect. The version below is from your *second* block.
+# If your POST logic is fully handled by render_index_page's POST block, you might not need this '/analyze' route.
+# Let's keep it as it was in the second half of your code for now.
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    feedback_messages = []
+    extracted_text_content = ""
+    resume_score = None 
+
+    # This is essentially the same as the POST block in render_index_page
+    # Consider if this route is still needed or if functionality can be consolidated
+    if 'resume' not in request.files:
+        feedback_messages.append("Error: No file part in the request.")
+        # Note: this render_template call in your original /analyze didn't pass `now`
+        return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+
+    file = request.files['resume']
+
+    if file.filename == '':
+        feedback_messages.append("Error: No file selected.")
+        return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+
+    if file:
+        filename = file.filename
+        # The original /analyze route read the file directly, not save to BytesIO then read.
+        # For consistency with the main route, using BytesIO:
+        file_stream = io.BytesIO()
+        file.save(file_stream)
+        file_stream.seek(0)
+
+        error_message = None
+        if filename.lower().endswith('.pdf'): # Used .endswith in original /analyze
+            extracted_text_content, error_message = extract_text_from_pdf(file_stream)
+        elif filename.lower().endswith('.docx'): # Used .endswith in original /analyze
+            extracted_text_content, error_message = extract_text_from_docx(file_stream)
+        else:
+            feedback_messages.append("Error: Unsupported file type. Please upload a PDF or DOCX file.")
+            return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
+
+        if error_message:
+            feedback_messages.append(f"Error during text extraction: {error_message}")
+        elif extracted_text_content and extracted_text_content.strip():
+            feedback_messages.append(f"Info: Successfully extracted text from '{filename}' ({len(extracted_text_content)} characters).")
+            analysis_results, resume_score_val = analyze_resume_content(extracted_text_content)
+            feedback_messages.extend(analysis_results)
+            resume_score = resume_score_val
+        else:
+            feedback_messages.append("Warning: Could not extract any text from the file, or the file is empty.")
+            resume_score = 0 
 
     return render_template('index.html', feedback=feedback_messages, text=extracted_text_content, score=resume_score)
 
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # For development, debug=True is fine. 
+    # For production (like on Render), Gunicorn will be used and this block isn't run by Gunicorn.
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=True)
